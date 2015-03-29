@@ -8,35 +8,27 @@
 ```
   bin/ucore.img
 
-  生成ucore.img的相关代码为
+  生成ucore.img的依赖关系如下：
   $(UCOREIMG): $(kernel) $(bootblock)
- 	$(V)dd if=/dev/zero of=$@ count=10000
- 	$(V)dd if=$(bootblock) of=$@ conv=notrunc
- 	$(V)dd if=$(kernel) of=$@ seek=1 conv=notrunc
  
-  为了生成ucore.img，首先需要生成bootblock、kernel
+  由此可见，为了生成ucore.img，首先需要生成bootblock、kernel
  
- >	bin/bootblock
+ >	对于 bootblock
  	| 生成bootblock的相关代码为
  	| $(bootblock): $(call toobj,$(bootfiles)) | $(call totarget,sign)
- 	|	@echo + ld $@
- 	|	$(V)$(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 $^ \
- 	|		-o $(call toobj,bootblock)
- 	|	@$(OBJDUMP) -S $(call objfile,bootblock) > \
- 	|		$(call asmfile,bootblock)
- 	|	@$(OBJCOPY) -S -O binary $(call objfile,bootblock) \
- 	|		$(call outfile,bootblock)
- 	|	@$(call totarget,sign) $(call outfile,bootblock) $(bootblock)
- 	|
- 	| 为了生成bootblock，首先需要生成bootasm.o、bootmain.o、sign
- 	|
- 	|>	obj/boot/bootasm.o, obj/boot/bootmain.o
+		他需要boot/下的文件编译出来的.o文件以及sign
+		
+
+ 	|>	对于boot/下编译得到的.o文件
  	|	| 生成bootasm.o,bootmain.o的相关makefile代码为
  	|	| bootfiles = $(call listf_cc,boot) 
  	|	| $(foreach f,$(bootfiles),$(call cc_compile,$(f),$(CC),\
  	|	|	$(CFLAGS) -Os -nostdinc))
- 	|	| 实际代码由宏批量生成
- 	|	| 
+		实际执行的代码为:
+		i386-elf-gcc -Iboot/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Os -nostdinc -c boot/bootasm.S -o obj/boot/bootasm.o
+		i386-elf-gcc -Iboot/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc  -fno-stack-protector -Ilibs/ -Os -nostdinc -c boot/bootmain.c -o obj/boot/bootmain.o
+		
+		再具体而言
  	|	| 生成bootasm.o需要bootasm.S
  	|	| 实际命令为
  	|	| gcc -Iboot/ -fno-builtin -Wall -ggdb -m32 -gstabs \
@@ -50,7 +42,8 @@
  	|	|	-fno-stack-protector  不生成用于检测缓冲区溢出的代码。这是for 应用程序的，我们是编译内核，ucore内核好像还用不到此功能。
  	|	| 	-Os  为减小代码大小而进行优化。根据硬件spec，主引导扇区只有512字节，我们写的简单bootloader的最终大小不能大于510字节。
  	|	| 	-I<dir>  添加搜索头文件的路径
- 	|	| 
+
+
  	|	| 生成bootmain.o需要bootmain.c
  	|	| 实际命令为
  	|	| gcc -Iboot/ -fno-builtin -Wall -ggdb -m32 -gstabs -nostdinc \
@@ -60,7 +53,8 @@
  	|	| 	-fno-builtin  除非用__builtin_前缀，
  	|	|	              否则不进行builtin函数的优化
  	|
- 	|>	bin/sign
+	对于sign文件
+
  	|	| 生成sign工具的makefile代码为
  	|	| $(call add_files_host,tools/sign.c,sign,sign)
  	|	| $(call create_target_host,sign,sign)
@@ -69,27 +63,18 @@
  	|	| gcc -Itools/ -g -Wall -O2 -c tools/sign.c \
  	|	| 	-o obj/sign/tools/sign.o
  	|	| gcc -g -Wall -O2 obj/sign/tools/sign.o -o bin/sign
- 	|
+
  	| 首先生成bootblock.o
  	| ld -m    elf_i386 -nostdlib -N -e start -Ttext 0x7C00 \
  	|	obj/boot/bootasm.o obj/boot/bootmain.o -o obj/bootblock.o
- 	| 其中关键的参数为
- 	|	-m <emulation>  模拟为i386上的连接器
- 	|	-nostdlib  不使用标准库
- 	|	-N  设置代码段和数据段均可读写
- 	|	-e <entry>  指定入口
- 	|	-Ttext  制定代码段开始位置
- 	|
+
  	| 拷贝二进制代码bootblock.o到bootblock.out
  	| objcopy -S -O binary obj/bootblock.o obj/bootblock.out
- 	| 其中关键的参数为
- 	|	-S  移除所有符号和重定位信息
- 	|	-O <bfdname>  指定输出格式
- 	|
  	| 使用sign工具处理bootblock.out，生成bootblock
  	| bin/sign obj/bootblock.out bin/bootblock
  
- >	bin/kernel
+	对于kernel:
+
  	| 生成kernel的相关代码为
  	| $(kernel): tools/kernel.ld
  	| $(kernel): $(KOBJS)
@@ -99,11 +84,11 @@
  	| 	@$(OBJDUMP) -t $@ | $(SED) '1,/SYMBOL TABLE/d; s/ .* / /; \
  	| 		/^$$/d' > $(call symfile,kernel)
  	| 
- 	| 为了生成kernel，首先需要 kernel.ld init.o readline.o stdio.o kdebug.o
+ 	| 为了生成kernel，需要kern和lib下个各种.o文件 kernel.ld init.o readline.o stdio.o kdebug.o
  	|	kmonitor.o panic.o clock.o console.o intr.o picirq.o trap.o
  	|	trapentry.o vectors.o pmm.o  printfmt.o string.o
  	| kernel.ld已存在
- 	|
+
  	|>	obj/kern/*/*.o 
  	|	| 生成这些.o文件的相关makefile代码为
  	|	| $(call add_files_cc,$(call listf_cc,$(KSRCDIR)),kernel,\
@@ -118,40 +103,26 @@
  	|	|		-Ikern/trap/ -Ikern/mm/ -c kern/init/init.c \
  	|	|		-o obj/kern/init/init.o
  	| 
- 	| 生成kernel时，makefile的几条指令中有@前缀的都不必需
- 	| 必需的命令只有
- 	| ld -m    elf_i386 -nostdlib -T tools/kernel.ld -o bin/kernel \
- 	| 	obj/kern/init/init.o obj/kern/libs/readline.o \
- 	| 	obj/kern/libs/stdio.o obj/kern/debug/kdebug.o \
- 	| 	obj/kern/debug/kmonitor.o obj/kern/debug/panic.o \
- 	| 	obj/kern/driver/clock.o obj/kern/driver/console.o \
- 	| 	obj/kern/driver/intr.o obj/kern/driver/picirq.o \
- 	| 	obj/kern/trap/trap.o obj/kern/trap/trapentry.o \
- 	| 	obj/kern/trap/vectors.o obj/kern/mm/pmm.o \
- 	| 	obj/libs/printfmt.o obj/libs/string.o
- 	| 其中新出现的关键参数为
- 	|	-T <scriptfile>  让连接器使用指定的脚本
  
   生成一个有10000个块的文件，每个块默认512字节，用0填充
   dd if=/dev/zero of=bin/ucore.img count=10000
- 
   把bootblock中的内容写到第一个块
   dd if=bin/bootblock of=bin/ucore.img conv=notrunc
- 
   从第二个块开始写kernel中的内容
   dd if=bin/kernel of=bin/ucore.img seek=1 conv=notrunc
 ```
 
-[练习1.2] 一个被系统认为是符合规范的硬盘主引导扇区的特征是什么?
+1.2 一个被系统认为是符合规范的硬盘主引导扇区的特征是什么?
 
-从sign.c的代码来看，一个磁盘主引导扇区只有512字节。且
+从sign.c的代码来看，一个磁盘主引导扇区只有512字节, 
+其中实际可以用的大小是510个字节，
 第510个（倒数第二个）字节是0x55，
 第511个（倒数第一个）字节是0xAA。
 
 
-## [练习2]
+## Ex 2
 
-[练习2.1] 从 CPU 加电后执行的第一条指令开始,单步跟踪 BIOS 的执行。
+2.1 从 CPU 加电后执行的第一条指令开始,单步跟踪 BIOS 的执行。
 
 通过改写Makefile文件
 
@@ -163,18 +134,17 @@
 ```
 
 在调用qemu时增加`-d in_asm -D q.log`参数，便可以将运行的汇编指令保存在q.log中。
-为防止qemu在gdb连接后立即开始执行，删除了`tools/gdbinit`中的`continue`行。
 
-[练习2.2] 在初始化位置0x7c00 设置实地址断点,测试断点正常。
+从q.log中看，计算机运行起来之后的第一条指令位置在0xfffffff0处，是一条跳转指令，BIOS的作用是将bootloader给搞进来，一共
+有16000多行。
+
+
+2.2  在初始化位置0x7c00 设置实地址断点,测试断点正常。
 
 在tools/gdbinit结尾加上
 
 ```
-    set architecture i8086  //设置当前调试的CPU是8086
 	b *0x7c00  //在0x7c00处设置断点。此地址是bootloader入口点地址，可看boot/bootasm.S的start地址处
-	c          //continue简称，表示继续执行
-	x /2i $pc  //显示当前eip处的汇编指令
-	set architecture i386  //设置当前调试的CPU是80386
 ```
 	
 运行"make debug"便可得到
@@ -193,7 +163,7 @@
 	   0x7c10:      mov    $0xd1,%al
 ```
 
-[练习2.3] 在调用qemu 时增加-d in_asm -D q.log 参数，便可以将运行的汇编指令保存在q.log 中。
+2.3 在调用qemu 时增加-d in_asm -D q.log 参数，便可以将运行的汇编指令保存在q.log 中。
 将执行的汇编代码与bootasm.S 和 bootblock.asm 进行比较，看看二者是否一致。
 
 在tools/gdbinit结尾加上
@@ -234,55 +204,23 @@
 	0x00007c16:  test   $0x2,%al
 	0x00007c18:  jne    0x7c14
 	
-	----------------
-	IN: 
-	0x00007c1a:  mov    $0xdf,%al
-	0x00007c1c:  out    %al,$0x60
-	0x00007c1e:  lgdtw  0x7c6c
-	0x00007c23:  mov    %cr0,%eax
-	0x00007c26:  or     $0x1,%eax
-	0x00007c2a:  mov    %eax,%cr0
-	
-	----------------
-	IN: 
-	0x00007c2d:  ljmp   $0x8,$0x7c32
-	
-	----------------
-	IN: 
-	0x00007c32:  mov    $0x10,%ax
-	0x00007c36:  mov    %eax,%ds
-	
-	----------------
-	IN: 
-	0x00007c38:  mov    %eax,%es
-	
-	----------------
-	IN: 
-	0x00007c3a:  mov    %eax,%fs
-	0x00007c3c:  mov    %eax,%gs
-	0x00007c3e:  mov    %eax,%ss
-	
-	----------------
-	IN: 
-	0x00007c40:  mov    $0x0,%ebp
-	
-	----------------
-	IN: 
-	0x00007c45:  mov    $0x7c00,%esp
-	0x00007c4a:  call   0x7d0d
-	
-	----------------
-	IN: 
-	0x00007d0d:  push   %ebp
 ```
 
-其与bootasm.S和bootblock.asm中的代码相同。
+	其与bootasm.S和bootblock.asm中的代码相同。
 
-## [练习3]
+2.4 自己找一个bootloader或者内核中的代码的位置，设置断点并进行测试
+	```
+		make debug-nox 
+		b init.c:30
+		c
+	```
+	会停在 pmm_init()上
+
+## Ex 3
 分析bootloader 进入保护模式的过程。
 
-从`%cs=0 $pc=0x7c00`，进入后
 
+* 查看bootloader.S 代码
 首先清理环境：包括将flag置0和将段寄存器置0
 ```
 	.code16
