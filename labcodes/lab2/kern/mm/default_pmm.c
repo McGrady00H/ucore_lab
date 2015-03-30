@@ -75,7 +75,7 @@ default_init_memmap(struct Page *base, size_t n) {
         SetPageProperty(p);
         p->property = 0;
         set_page_ref(p, 0);
-        list_add_before(&free_list, &(p->page_link));
+        list_add_after(&free_list, &(p->page_link));
     }
     nr_free += n;
     //first block
@@ -130,7 +130,7 @@ default_free_pages(struct Page *base, size_t n) {
     }
     //list_add_before(le, base->page_link);
     for(p=base;p<base+n;p++){
-      list_add_before(le, &(p->page_link));
+      list_add_after(le, &(p->page_link));
     }
     base->flags = 0;
     set_page_ref(base, 0);
