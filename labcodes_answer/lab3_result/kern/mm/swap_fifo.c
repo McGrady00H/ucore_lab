@@ -50,7 +50,7 @@ _fifo_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, int
     assert(entry != NULL && head != NULL);
     //record the page access situlation
     /*LAB3 EXERCISE 2: YOUR CODE*/ 
-    //(1)link the most recent arrival page at the back of the pra_list_head qeueue.
+    //(1)link 3 most recent arrival page at the back of the pra_list_head qeueue.
     list_add(head, entry);
     return 0;
 }
