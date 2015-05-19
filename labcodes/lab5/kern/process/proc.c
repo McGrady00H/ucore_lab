@@ -414,12 +414,15 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
 		goto fork_out;
 	}
 	proc->parent = current;
+	assert(current->wait_state == 0);
 	if (setup_kstack(proc) != 0){
-		goto bad_fork_cleanup_kstack;
+		//goto bad_fork_cleanup_kstack;
+		goto bad_fork_cleanup_proc;
 	}
 
 	if (copy_mm(clone_flags, proc) != 0) {
-		goto bad_fork_cleanup_proc;
+		//goto bad_fork_cleanup_proc;
+		goto bad_fork_cleanup_kstack;
 	}
 	copy_thread(proc, stack, tf);
 
